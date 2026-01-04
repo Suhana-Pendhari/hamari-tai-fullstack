@@ -5,6 +5,13 @@ node_modules/
 .env
 .env.local
 
+# Google Cloud credentials
+google-credentials.json
+*-credentials.json
+!package.json
+!package-lock.json
+!tsconfig.json
+
 # Logs
 *.log
 npm-debug.log*

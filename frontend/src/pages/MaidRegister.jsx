@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import Toast from '../components/Toast';
+import { processDocumentWithVisionAPI } from '../utils/googleOCR';
 
 const MaidRegister = () => {
   const { user } = useAuth();
@@ -33,10 +34,15 @@ const MaidRegister = () => {
     aadhaar: null,
     pan: null
   });
+  const [ocrResults, setOcrResults] = useState({
+    aadhaar: null,
+    pan: null
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [loadingProfile, setLoadingProfile] = useState(isEditMode);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [processingOCR, setProcessingOCR] = useState(false);
 
   useEffect(() => {
     if (isEditMode) {
@@ -122,11 +128,46 @@ const MaidRegister = () => {
     }
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    const fileType = e.target.name; // 'aadhaar' or 'pan'
+    
     setFiles({
       ...files,
-      [e.target.name]: e.target.files[0]
+      [fileType]: file
     });
+
+    // Process OCR immediately when file is selected
+    if (file && (fileType === 'aadhaar' || fileType === 'pan')) {
+      setProcessingOCR(true);
+      try {
+        const documentType = fileType === 'aadhaar' ? 'aadhaar' : 'pan';
+        const result = await processDocumentWithVisionAPI(file, documentType);
+        
+        if (result.success) {
+          setOcrResults(prev => ({
+            ...prev,
+            [fileType]: result.data
+          }));
+          
+          // Auto-fill name if extracted
+          if (result.data.name && !formData.name) {
+            setFormData(prev => ({
+              ...prev,
+              name: result.data.name
+            }));
+          }
+        } else {
+          console.warn(`OCR failed for ${fileType}:`, result.error);
+          // Continue without OCR - will use server-side fallback
+        }
+      } catch (error) {
+        console.error(`OCR error for ${fileType}:`, error);
+        // Continue without OCR - will use server-side fallback
+      } finally {
+        setProcessingOCR(false);
+      }
+    }
   };
 
   const handleGetLocation = () => {
@@ -212,6 +253,7 @@ const MaidRegister = () => {
             'Content-Type': 'multipart/form-data'
           }
         });
+        
         setShowSuccess(true);
         setTimeout(() => {
           navigate('/maid-dashboard');
@@ -460,6 +502,21 @@ const MaidRegister = () => {
                 <p className="text-xs text-gray-500 mt-1">
                   {isEditMode ? 'Leave empty to keep existing document' : 'Upload Aadhaar card image or PDF'}
                 </p>
+                {processingOCR && files.aadhaar && (
+                  <p className="text-xs text-orange-600 mt-1">Processing OCR...</p>
+                )}
+                {ocrResults.aadhaar && !processingOCR && (
+                  <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-xs font-semibold text-green-800 mb-1">✓ OCR Extraction Successful</p>
+                    {ocrResults.aadhaar.aadhaarNumber && (
+                      <p className="text-xs text-green-700"><strong>Aadhaar:</strong> {ocrResults.aadhaar.aadhaarNumber}</p>
+                    )}
+                    {ocrResults.aadhaar.name && (
+                      <p className="text-xs text-green-700"><strong>Name:</strong> {ocrResults.aadhaar.name}</p>
+                    )}
+                    <p className="text-xs text-gray-600 mt-1">Confidence: {ocrResults.aadhaar.confidence?.toFixed(1) || 'N/A'}%</p>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -476,6 +533,21 @@ const MaidRegister = () => {
                 <p className="text-xs text-gray-500 mt-1">
                   {isEditMode ? 'Leave empty to keep existing document' : 'Upload PAN card image or PDF'}
                 </p>
+                {processingOCR && files.pan && (
+                  <p className="text-xs text-orange-600 mt-1">Processing OCR...</p>
+                )}
+                {ocrResults.pan && !processingOCR && (
+                  <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-xs font-semibold text-green-800 mb-1">✓ OCR Extraction Successful</p>
+                    {ocrResults.pan.panNumber && (
+                      <p className="text-xs text-green-700"><strong>PAN:</strong> {ocrResults.pan.panNumber}</p>
+                    )}
+                    {ocrResults.pan.name && (
+                      <p className="text-xs text-green-700"><strong>Name:</strong> {ocrResults.pan.name}</p>
+                    )}
+                    <p className="text-xs text-gray-600 mt-1">Confidence: {ocrResults.pan.confidence?.toFixed(1) || 'N/A'}%</p>
+                  </div>
+                )}
               </div>
             </div>
 

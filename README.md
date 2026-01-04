@@ -4,14 +4,15 @@ A complete MERN-stack web application connecting verified domestic workers (maid
 
 ## Features
 
-- **AI-Powered Verification**: OCR-based document extraction (Aadhaar/PAN) using Tesseract.js
+- **AI-Powered Verification**: Multi-tier OCR system using Google Cloud Vision API (primary), with Tesseract.js fallback
 - **Smart Recommendation Engine**: Geospatial queries, skills matching, salary range, and ratings
 - **Trust Score System**: AI NLP analysis of reviews to assign trust levels (Trusted, Verified, Needs Review)
 - **Role-Based Authentication**: Separate dashboards for users, maids, and admins
 - **Real-time Chat**: Socket.io-based secure in-app messaging
 - **Booking System**: Complete booking request and management workflow
 - **Review & Rating**: Comprehensive review system with sentiment analysis
-- **Admin Panel**: Document verification, user/maid management, and analytics
+- **Admin Panel**: Document verification, user/maid management
+- **Google Maps Integration**: Interactive map view for nearby maid discovery
 
 ## Tech Stack
 
@@ -20,7 +21,8 @@ A complete MERN-stack web application connecting verified domestic workers (maid
 - MongoDB with Mongoose
 - JWT Authentication
 - Socket.io for real-time chat
-- Tesseract.js for OCR
+- Google Cloud Vision API for OCR (primary)
+- Tesseract.js for OCR (fallback)
 - Natural.js for NLP sentiment analysis
 - Multer for file uploads
 
@@ -30,6 +32,8 @@ A complete MERN-stack web application connecting verified domestic workers (maid
 - Tailwind CSS
 - Axios for API calls
 - Socket.io-client for real-time features
+- Google Maps JavaScript API for location visualization
+- Google Cloud Vision API for client-side OCR
 - Vite as build tool
 
 ## Project Structure
@@ -85,6 +89,7 @@ JWT_SECRET=your-super-secret-jwt-key-change-in-production
 JWT_EXPIRE=7d
 NODE_ENV=development
 FRONTEND_URL=http://localhost:3000
+GOOGLE_APPLICATION_CREDENTIALS=path/to/your/google-credentials.json
 ```
 
 4. Start the server:
@@ -109,7 +114,14 @@ cd frontend
 npm install
 ```
 
-3. Start the development server:
+3. Create `.env` file (or `.env.local`):
+```env
+VITE_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+VITE_GOOGLE_VISION_API_KEY=your-google-vision-api-key
+VITE_GA_MEASUREMENT_ID=your-ga4-measurement-id
+```
+
+4. Start the development server:
 ```bash
 npm run dev
 ```
@@ -165,9 +177,12 @@ The application will be available at `http://localhost:3000`
 ## Key Features Implementation
 
 ### AI OCR Document Extraction
-- Uses Tesseract.js to extract text from uploaded Aadhaar/PAN documents
+- **Primary**: Google Cloud Vision API for high-accuracy text extraction
+- **Client-side**: Google Cloud Vision API (via REST) for immediate feedback
+- **Fallback**: Tesseract.js for server-side processing when Vision API is unavailable
 - Automatically extracts document numbers and names
-- Stores OCR data for verification
+- Stores OCR data with confidence scores for verification
+- OCR priority: Client Vision API → Server Vision API → Tesseract.js
 
 ### Recommendation Engine
 - Calculates distance using Haversine formula
@@ -188,6 +203,8 @@ The application will be available at `http://localhost:3000`
 ### Geospatial Queries
 - MongoDB 2dsphere indexes for location-based search
 - Distance-based filtering and sorting
+- Google Maps integration for visual location discovery
+- Interactive map view with maid markers and info windows
 
 ## Development Notes
 
@@ -197,11 +214,57 @@ The application will be available at `http://localhost:3000`
 - Role-based access control for admin routes
 - Error handling and validation throughout
 
+## Google Technologies Used
+
+This project integrates several Google technologies to enhance functionality and user experience:
+
+### 1. Google Maps JavaScript API
+**Purpose**: Location-based maid discovery and visualization
+- **Why**: Provides interactive map visualization for nearby maid search, making it easier for users to see maid locations relative to their position
+- **Features**: 
+  - Interactive map with user location marker
+  - Maid location markers with clickable info windows
+  - Distance visualization on map
+  - Integration with existing geospatial search
+
+### 2. Google Cloud Vision API (Client-side OCR)
+**Purpose**: AI-based document OCR for immediate user feedback
+- **Why**: Provides high-accuracy text extraction directly in the browser, giving users instant feedback when uploading Aadhaar/PAN documents
+- **Features**:
+  - Real-time OCR processing on file upload
+  - Automatic extraction of document numbers and names
+  - Confidence score display
+  - Preview of extracted data before submission
+
+### 3. Google Cloud Vision API (Server-side OCR)
+**Purpose**: Advanced OCR verification and fallback processing
+- **Why**: Server-side processing ensures reliable OCR even when client-side fails, and provides higher accuracy for document verification
+- **Features**:
+  - Fallback OCR when client-side processing fails
+  - Admin-triggered re-verification
+  - Stores extracted text and confidence scores in MongoDB
+  - Part of multi-tier OCR fallback chain
+
+### OCR Priority Chain
+1. **Google Cloud Vision API (Client)** - First attempt for immediate feedback
+2. **Google Cloud Vision API (Server)** - Fallback when client fails or for admin re-verification
+3. **Tesseract.js** - Final fallback when Google services are unavailable
+
+## Environment Variables
+
+### Backend (.env)
+- `GOOGLE_APPLICATION_CREDENTIALS` - Path to Google Cloud service account JSON file
+
+### Frontend (.env or .env.local)
+- `VITE_GOOGLE_MAPS_API_KEY` - Google Maps JavaScript API key
+- `VITE_GOOGLE_VISION_API_KEY` - Google Cloud Vision API key (for client-side OCR)
+
+**Note**: The application will function without Google services, but with reduced features (fallback to Tesseract.js for OCR, no map view).
+
 ## Future Enhancements
 
 - Payment integration
 - Push notifications
-- Advanced analytics dashboard
 - Mobile app (React Native)
 - Multi-language support
 - Video call integration

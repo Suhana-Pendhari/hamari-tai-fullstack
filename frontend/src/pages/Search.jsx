@@ -3,12 +3,14 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { FiMapPin, FiStar, FiDollarSign, FiClock, FiShield, FiSearch, FiFilter } from 'react-icons/fi';
+import { FiMapPin, FiStar, FiDollarSign, FiClock, FiShield, FiSearch, FiFilter, FiMap } from 'react-icons/fi';
+import NearbyMaidsMap from '../components/NearbyMaidsMap';
 
 const Search = () => {
   const { user } = useAuth();
   const [maids, setMaids] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
   const [filters, setFilters] = useState({
     lat: user?.location?.coordinates?.[1] || 28.6139,
     lng: user?.location?.coordinates?.[0] || 77.2090,
@@ -244,7 +246,41 @@ const Search = () => {
 
           {/* Results */}
           <div className="lg:col-span-3">
-            {loading ? (
+            {/* View Mode Toggle */}
+            <div className="mb-4 flex gap-3">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-4 py-2 rounded-xl font-semibold transition-all flex items-center ${
+                  viewMode === 'list'
+                    ? 'bg-orange-500 text-white shadow-md'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <FiSearch className="mr-2" />
+                List View
+              </button>
+              <button
+                onClick={() => setViewMode('map')}
+                className={`px-4 py-2 rounded-xl font-semibold transition-all flex items-center ${
+                  viewMode === 'map'
+                    ? 'bg-orange-500 text-white shadow-md'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <FiMap className="mr-2" />
+                Map View
+              </button>
+            </div>
+
+            {viewMode === 'map' ? (
+              <NearbyMaidsMap
+                userLocation={{
+                  lat: filters.lat,
+                  lng: filters.lng
+                }}
+                maxDistance={filters.maxDistance}
+              />
+            ) : loading ? (
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
               </div>

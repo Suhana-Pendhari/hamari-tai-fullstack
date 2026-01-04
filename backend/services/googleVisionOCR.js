@@ -1,35 +1,103 @@
-const Tesseract = require('tesseract.js');
+const vision = require('@google-cloud/vision');
 const fs = require('fs');
-const path = require('path');
-const { processDocument: processDocumentWithVision } = require('../services/googleVisionOCR');
+
+let visionClient = null;
 
 /**
- * Extract text from document image using OCR
+ * Initialize Google Cloud Vision client
+ * Uses GOOGLE_APPLICATION_CREDENTIALS environment variable for authentication
+ */
+const initializeVisionClient = () => {
+  if (visionClient) {
+    return visionClient;
+  }
+
+  try {
+    const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    
+    if (!credentialsPath) {
+      console.warn('GOOGLE_APPLICATION_CREDENTIALS not set. Google Vision API will not be available.');
+      return null;
+    }
+
+    if (!fs.existsSync(credentialsPath)) {
+      console.warn(`Google credentials file not found at ${credentialsPath}. Google Vision API will not be available.`);
+      return null;
+    }
+
+    visionClient = new vision.ImageAnnotatorClient();
+    console.log('Google Cloud Vision API client initialized successfully');
+    return visionClient;
+  } catch (error) {
+    console.error('Error initializing Google Cloud Vision client:', error);
+    return null;
+  }
+};
+
+/**
+ * Extract text from image using Google Cloud Vision API
  * @param {String} imagePath - Path to the image file
  * @returns {Promise<Object>} - Extracted text and confidence
  */
 const extractTextFromImage = async (imagePath) => {
   try {
-    const { data: { text, confidence } } = await Tesseract.recognize(
-      imagePath,
-      'eng',
-      {
-        logger: m => {
-          // Log progress if needed
-          if (m.status === 'recognizing text') {
-            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
-          }
-        }
-      }
-    );
+    const client = initializeVisionClient();
+    
+    if (!client) {
+      return {
+        text: '',
+        confidence: 0,
+        success: false,
+        error: 'Google Vision API client not initialized'
+      };
+    }
+
+    if (!fs.existsSync(imagePath)) {
+      return {
+        text: '',
+        confidence: 0,
+        success: false,
+        error: 'Image file not found'
+      };
+    }
+
+    const [result] = await client.textDetection(imagePath);
+    const detections = result.textAnnotations;
+
+    if (!detections || detections.length === 0) {
+      return {
+        text: '',
+        confidence: 0,
+        success: false,
+        error: 'No text detected in image'
+      };
+    }
+
+    // First detection contains the full text
+    const fullText = detections[0].description || '';
+    
+    // Calculate average confidence from all detections
+    const confidences = detections
+      .slice(1)
+      .map(detection => {
+        // Vision API doesn't always provide confidence, so we estimate
+        // based on bounding box quality
+        return detection.boundingPoly ? 0.85 : 0.7;
+      })
+      .filter(conf => conf > 0);
+    
+    const avgConfidence = confidences.length > 0
+      ? confidences.reduce((a, b) => a + b, 0) / confidences.length
+      : 0.8;
 
     return {
-      text: text.trim(),
-      confidence: confidence,
-      success: true
+      text: fullText.trim(),
+      confidence: avgConfidence * 100, // Convert to percentage
+      success: true,
+      method: 'google-cloud-vision'
     };
   } catch (error) {
-    console.error('OCR Error:', error);
+    console.error('Google Vision API OCR error:', error);
     return {
       text: '',
       confidence: 0,
@@ -105,26 +173,12 @@ const extractName = (text) => {
 };
 
 /**
- * Process document and extract information
- * Uses fallback chain: Google Cloud Vision API -> Tesseract.js
+ * Process document and extract information using Google Cloud Vision API
  * @param {String} imagePath - Path to document image
  * @param {String} documentType - 'aadhaar' or 'pan'
  * @returns {Promise<Object>} - Extracted document data
  */
 const processDocument = async (imagePath, documentType) => {
-  // Try Google Cloud Vision API first (if configured)
-  try {
-    const visionResult = await processDocumentWithVision(imagePath, documentType);
-    if (visionResult.success && visionResult.data) {
-      console.log(`OCR successful using Google Cloud Vision API for ${documentType}`);
-      return visionResult;
-    }
-  } catch (visionError) {
-    console.warn(`Google Vision API failed, falling back to Tesseract:`, visionError.message);
-  }
-
-  // Fallback to Tesseract.js
-  console.log(`Using Tesseract.js OCR for ${documentType}`);
   const ocrResult = await extractTextFromImage(imagePath);
   
   if (!ocrResult.success) {
@@ -138,7 +192,7 @@ const processDocument = async (imagePath, documentType) => {
   const extractedData = {
     text: ocrResult.text,
     confidence: ocrResult.confidence,
-    method: 'tesseract'
+    method: ocrResult.method || 'google-cloud-vision'
   };
 
   if (documentType === 'aadhaar') {
@@ -160,6 +214,7 @@ module.exports = {
   extractAadhaarNumber,
   extractPANNumber,
   extractName,
-  processDocument
+  processDocument,
+  initializeVisionClient
 };
 

@@ -58,6 +58,7 @@ const MaidProfile = () => {
           lng: user?.location?.coordinates?.[0] || 0
         }
       });
+      
       alert('Booking request sent successfully!');
       setShowBookingForm(false);
       navigate('/dashboard');

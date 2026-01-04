@@ -57,12 +57,13 @@ const UserDashboard = () => {
     }
 
     try {
-      await axios.post('/api/reviews', {
+      const response = await axios.post('/api/reviews', {
         maid: maidId,
         booking: bookingId,
         rating: currentReviewData.rating,
         comment: currentReviewData.comment || ''
       });
+      
       alert('Review submitted successfully!');
       setShowReviewForm(null);
       setReviewData(prev => {

@@ -21,12 +21,83 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/hamari-tai', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('MongoDB Connected'))
-.catch(err => console.error('MongoDB connection error:', err));
+const connectDB = async () => {
+  try {
+    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hamari-tai';
+    
+    // Validate connection string format
+    if (mongoURI.includes('mongodb+srv://')) {
+      // Check for common Atlas connection string issues
+      if (mongoURI.includes('cluster.mongocp.') || mongoURI.includes('cluster.mongodb.net') && !mongoURI.match(/cluster[0-9]?\.\w+\.mongodb\.net/)) {
+        console.error('⚠️  WARNING: Your MongoDB Atlas connection string appears to be invalid.');
+        console.error('   The hostname should look like: cluster0.xxxxx.mongodb.net');
+        console.error('   Current URI (hidden):', mongoURI.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'));
+        console.error('\n   To fix:');
+        console.error('   1. Go to MongoDB Atlas: https://cloud.mongodb.com');
+        console.error('   2. Click "Connect" on your cluster');
+        console.error('   3. Choose "Connect your application"');
+        console.error('   4. Copy the connection string and update MONGODB_URI in .env');
+        console.error('   5. Make sure to replace <password> with your actual password');
+        console.error('   6. Format: mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/hamari-tai\n');
+      }
+    }
+    
+    await mongoose.connect(mongoURI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 10000, // Increased to 10s for Atlas
+    });
+    console.log('✅ MongoDB Connected successfully');
+    console.log('   Database:', mongoose.connection.name);
+    console.log('   Host:', mongoose.connection.host || 'Atlas Cluster');
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err.message);
+    
+    // Provide specific error guidance
+    if (err.message.includes('ENOTFOUND') || err.message.includes('querySrv')) {
+      console.error('\n🔍 This error usually means:');
+      console.error('   • Invalid MongoDB Atlas connection string');
+      console.error('   • Cluster hostname is incorrect');
+      console.error('   • Network/DNS issue');
+      console.error('\n💡 Quick Fix Options:');
+      console.error('   Option 1: Use Local MongoDB (Easiest)');
+      console.error('      Update backend/.env:');
+      console.error('      MONGODB_URI=mongodb://localhost:27017/hamari-tai');
+      console.error('      Then start MongoDB: mongod --dbpath "C:\\data\\db"');
+      console.error('\n   Option 2: Fix Atlas Connection String');
+      console.error('      1. Go to: https://cloud.mongodb.com');
+      console.error('      2. Get correct connection string from your cluster');
+      console.error('      3. Update MONGODB_URI in backend/.env');
+      console.error('      4. Format: mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/hamari-tai');
+    } else if (err.message.includes('ECONNREFUSED')) {
+      console.error('\n🔍 MongoDB is not running locally');
+      console.error('   Start MongoDB: mongod --dbpath "C:\\data\\db"');
+    } else {
+      console.error('\n📋 General troubleshooting:');
+      console.error('   1. Check your .env file has correct MONGODB_URI');
+      console.error('   2. For Atlas: Verify cluster is running and IP is whitelisted');
+      console.error('   3. For local: Make sure MongoDB service is running');
+    }
+    console.error('');
+    
+    // Don't exit in development - allow server to start without DB for testing
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  }
+};
+
+// Handle MongoDB connection events
+mongoose.connection.on('disconnected', () => {
+  console.log('⚠️  MongoDB disconnected. Attempting to reconnect...');
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('✅ MongoDB reconnected');
+});
+
+// Connect to database
+connectDB();
 
 // Socket.io for chat
 io.on('connection', (socket) => {
